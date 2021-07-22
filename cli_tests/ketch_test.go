@@ -3,6 +3,7 @@
 package cli_tests
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -52,13 +53,16 @@ func init() {
 // retry tries a command <times> in intervals of <wait> seconds.
 // If <match> is never found in command output, an error is returned containing
 // all aggregated output.
-func retry(cmd *exec.Cmd, match string, times, wait int) error {
+func retry(name string, args []string, input string, match string, times, wait int) error {
 	sb := strings.Builder{}
 	for i := 0; i < times; i++ {
-		b, err := exec.Command(ketch, "app", "info", appName).CombinedOutput()
-		if err != nil {
-			return err
+		cmd := exec.Command(name, args...)
+		if input != "" {
+			var buf bytes.Buffer
+			buf.WriteString(input)
+			cmd.Stdin = &buf
 		}
+		b, _ := cmd.CombinedOutput() // sometimes we want exit status 1
 		sb.Write(b)
 		sb.WriteString("\n")
 
@@ -66,15 +70,14 @@ func retry(cmd *exec.Cmd, match string, times, wait int) error {
 			return nil
 		}
 		if i < times-1 {
-			fmt.Println("retrying command: ", cmd.String())
+			fmt.Println("retrying command: ", name, args)
 			time.Sleep(time.Second * time.Duration(wait))
 		}
 	}
-	return fmt.Errorf("retry failed on command %s. Output: %s", cmd.String(), sb.String())
+	return fmt.Errorf("retry failed on command %s. Output: %s", name, sb.String())
 }
 
 func TestHelp(t *testing.T) {
-	fmt.Println(ketch)
 	b, err := exec.Command(ketch, "help").CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Contains(t, string(b), "For details see https://theketch.io")
@@ -144,7 +147,6 @@ func TestFrameworkExport(t *testing.T) {
 	require.Contains(t, string(b), fmt.Sprintf("name: %s", frameworkCliName), string(b))
 	require.Contains(t, string(b), fmt.Sprintf("namespace: ketch-%s", frameworkCliName), string(b))
 	require.Contains(t, string(b), "appQuotaLimit: 2", string(b))
-
 }
 
 func TestAppDeploy(t *testing.T) {
@@ -154,11 +156,10 @@ func TestAppDeploy(t *testing.T) {
 }
 
 func TestAppInfo(t *testing.T) {
-	cmd := exec.Command(ketch, "app", "info", appName)
-	err := retry(cmd, "running", 10, 5)
+	err := retry(ketch, []string{"app", "info", appName}, "", "running", 20, 5)
 	require.Nil(t, err)
 
-	b, err := cmd.Output()
+	b, err := exec.Command(ketch, "app", "info", appName).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.True(t, regexp.MustCompile("DEPLOYMENT VERSION[ \t]+IMAGE[ \t]+PROCESS NAME[ \t]+WEIGHT[ \t]+STATE[ \t]+CMD").Match(b), string(b))
 	require.True(t, regexp.MustCompile(fmt.Sprintf("1[ \t]+%s[ \t]+web[ \t]+100%%[ \t]+[0-9] running[ \t]", appImage)).Match(b), string(b))
@@ -196,30 +197,6 @@ func TestCnameAddRemove(t *testing.T) {
 	require.True(t, regexp.MustCompile(fmt.Sprintf("Address: http://%s", cName)).Match(b), string(b))
 }
 
-func TestUnitAdd(t *testing.T) {
-	err := exec.Command(ketch, "unit", "add", "1", "--app", appName).Run()
-	require.Nil(t, err)
-	b, err := exec.Command("kubectl", "describe", "apps", appName).CombinedOutput()
-	require.Nil(t, err)
-	require.True(t, regexp.MustCompile("Units:[ \t]+2").Match(b), string(b))
-}
-
-func TestUnitRemove(t *testing.T) {
-	err := exec.Command(ketch, "unit", "remove", "1", "--app", appName).Run()
-	require.Nil(t, err)
-	b, err := exec.Command("kubectl", "describe", "apps", appName).CombinedOutput()
-	require.Nil(t, err)
-	require.True(t, regexp.MustCompile("Units:[ \t]+1").Match(b), string(b))
-}
-
-func TestUnitSet(t *testing.T) {
-	err := exec.Command(ketch, "unit", "set", "3", "--app", appName).Run()
-	require.Nil(t, err)
-	b, err := exec.Command("kubectl", "describe", "apps", appName).CombinedOutput()
-	require.Nil(t, err)
-	require.True(t, regexp.MustCompile("Units: [ \t]+").Match(b), string(b))
-}
-
 func TestEnvSet(t *testing.T) {
 	err := exec.Command(ketch, "env", "set", fmt.Sprintf("%s=%s", testEnvvarKey, testEnvVarValue), "--app", appName).Run()
 	require.Nil(t, err)
@@ -243,16 +220,18 @@ func TestAppRemove(t *testing.T) {
 	b, err := exec.Command(ketch, "app", "remove", appName).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Contains(t, string(b), "Successfully removed!")
+	err = retry(ketch, []string{"app", "info", appName}, "", "not found", 4, 4)
+	require.Nil(t, err)
 }
 
 func TestFrameworkByCliRemove(t *testing.T) {
-	b, err := exec.Command(ketch, "framework", "remove", frameworkCliName).CombinedOutput()
-	require.Nil(t, err, string(b))
-	require.Contains(t, string(b), "Framework successfully removed!")
+	// framework remove may complain that apps are still running if tests run too fast
+	err := retry(ketch, []string{"framework", "remove", frameworkCliName}, fmt.Sprintf("ketch-%s", frameworkCliName), "Framework successfully removed!", 3, 3)
+	require.Nil(t, err)
 }
 
 func TestFrameworkByYamlRemove(t *testing.T) {
-	b, err := exec.Command(ketch, "framework", "remove", frameworkYamlName).CombinedOutput()
-	require.Nil(t, err, string(b))
-	require.Contains(t, string(b), "Framework successfully removed!")
+	// framework remove may complain that apps are still running if tests run too fast
+	err := retry(ketch, []string{"framework", "remove", frameworkYamlName}, fmt.Sprintf("ketch-%s", frameworkYamlName), "Framework successfully removed!", 3, 3)
+	require.Nil(t, err)
 }
