@@ -81,14 +81,6 @@ func TestHelp(t *testing.T) {
 	require.Contains(t, string(b), "Flags")
 }
 
-func TestHelpKetchPath(t *testing.T) {
-	b, err := exec.Command("ketch", "help").CombinedOutput()
-	require.Nil(t, err, string(b))
-	require.Contains(t, string(b), "For details see https://theketch.io")
-	require.Contains(t, string(b), "Available Commands")
-	require.Contains(t, string(b), "Flags")
-}
-
 //
 //func TestFrameworkAddByCLI(t *testing.T) {
 //	b, err := exec.Command(ketch, "framework", "add", frameworkCliName, "--ingress-service-endpoint", ingress, "--ingress-type", "traefik").CombinedOutput()
