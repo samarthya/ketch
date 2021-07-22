@@ -46,4 +46,4 @@ jobs:
         - $TRAVIS_BUILD_DIR/bin/ketch help
         - pwd
         - echo $TRAVIS_BUILD_DIR
-        - go test ./cli_tests/... -tags integration
+        - KETCH_EXECUTABLE_PATH="$TRAVIS_BUILD_DIR/bin/ketch" go test ./cli_tests/... -tags integration
