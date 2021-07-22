@@ -44,4 +44,7 @@ jobs:
         - bash cli_tests/install_bats.sh
         - bash cli_tests/install_ketch.sh
         - $(pwd)/bin/ketch help
+        - pwd
+        - export PATH=$PATH:$(pwd)/bin/ketch
+        - which ketch
         - go test ./cli_tests/... -tags integration
