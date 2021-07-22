@@ -43,7 +43,4 @@ jobs:
         - bash cli_tests/install_minikube.sh
         - bash cli_tests/install_bats.sh
         - bash cli_tests/install_ketch.sh
-        - $TRAVIS_BUILD_DIR/bin/ketch help
-        - pwd
-        - echo $TRAVIS_BUILD_DIR
         - KETCH_EXECUTABLE_PATH="$TRAVIS_BUILD_DIR/bin/ketch" go test ./cli_tests/... -tags integration
