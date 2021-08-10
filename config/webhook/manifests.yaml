@@ -1,17 +1,18 @@
 
 ---
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
   creationTimestamp: null
   name: mutating-webhook-configuration
 webhooks:
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-theketch-io-v1beta1-framework
+      path: /mutate-theketch-io-v1-framework
   failurePolicy: Fail
   name: mframework.kb.io
   rules:
@@ -24,20 +25,22 @@ webhooks:
     - UPDATE
     resources:
     - frameworks
+  sideEffects: None
 
 ---
-apiVersion: admissionregistration.k8s.io/v1beta1
+apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   creationTimestamp: null
   name: validating-webhook-configuration
 webhooks:
-- clientConfig:
-    caBundle: Cg==
+- admissionReviewVersions:
+  - v1beta1
+  clientConfig:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-theketch-io-v1beta1-framework
+      path: /validate-theketch-io-v1-framework
   failurePolicy: Fail
   name: vframework.kb.io
   rules:
@@ -51,3 +54,4 @@ webhooks:
     - DELETE
     resources:
     - frameworks
+  sideEffects: None

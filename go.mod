@@ -3,7 +3,7 @@ module github.com/shipa-corp/ketch
 go 1.16
 
 require (
-	bou.ke/monkey v1.0.2
+	bou.ke/monkey v1.0.2 // indirect
 	github.com/BurntSushi/toml v0.3.1
 	github.com/buildpacks/pack v0.15.1
 	github.com/go-logr/logr v0.1.0

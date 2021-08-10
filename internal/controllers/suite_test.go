@@ -49,6 +49,7 @@ func setup(reader templates.Reader, helm Helm, objects []runtime.Object) (*testi
 		},
 	}
 	cfg, err := ctx.env.Start()
+	fmt.Println("E", err)
 	if err != nil {
 		return nil, err
 	}
