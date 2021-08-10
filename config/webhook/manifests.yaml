@@ -12,7 +12,7 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /mutate-theketch-io-v1-framework
+      path: /mutate-theketch-io-v1beta1-framework
   failurePolicy: Fail
   name: mframework.kb.io
   rules:
@@ -40,7 +40,7 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-theketch-io-v1-framework
+      path: /validate-theketch-io-v1beta1-framework
   failurePolicy: Fail
   name: vframework.kb.io
   rules:

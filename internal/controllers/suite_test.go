@@ -19,9 +19,12 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"golang.org/x/mod/semver"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,7 +44,23 @@ type testingContext struct {
 	cancel    context.CancelFunc
 }
 
+func verifyKubeApiServerVersion() error {
+	b, err := exec.Command("kube-apiserver", "--version").CombinedOutput()
+	if err != nil {
+		return err
+	}
+	version := strings.TrimSpace(strings.TrimLeft(string(b), "Kubernetes"))
+	if semver.Compare(version, "v1.16.0") < 0 {
+		return fmt.Errorf("kube-apiserver --version must be >= 1.16, got %s", version)
+	}
+	return nil
+}
+
 func setup(reader templates.Reader, helm Helm, objects []client.Object) (*testingContext, error) {
+	err := verifyKubeApiServerVersion()
+	if err != nil {
+		return nil, err
+	}
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	ctx := &testingContext{
 		Context: cancelCtx,
@@ -51,7 +70,6 @@ func setup(reader templates.Reader, helm Helm, objects []client.Object) (*testin
 		cancel: cancel,
 	}
 	cfg, err := ctx.env.Start()
-	fmt.Println("E", err)
 	if err != nil {
 		return nil, err
 	}
