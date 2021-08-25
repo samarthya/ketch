@@ -77,7 +77,7 @@ EOF
 }
 
 @test "framework export" {
-  run $KETCH framework export "$FRAMEWORK"
+  run $KETCH framework export "$FRAMEWORK" -f framework.yaml
   result=$(cat framework.yaml)
   echo "RECEIVED:" $result
   [[ $result =~ "name: $FRAMEWORK" ]]
@@ -144,10 +144,18 @@ EOF
   [[ $result =~ "Description: cli test app" ]]
 }
 
+@test "app unit set" {
+ run $KETCH app deploy "$APP_NAME" --framework "$FRAMEWORK" -i "$APP_IMAGE" --units 3
+ [[ $status -eq 0 ]]
+  result=$(kubectl describe apps $APP_NAME)
+  echo "RECEIVED:" $result
+ [[ $result =~ "Units:  3" ]] # note two spaces
+}
+
 @test "app list" {
   result=$($KETCH app list)
   headerRegex="NAME[ \t]+FRAMEWORK[ \t]+STATE[ \t]+ADDRESSES[ \t]+BUILDER[ \t]+DESCRIPTION"
-  dataRegex="$APP_NAME[ \t]+$FRAMEWORK[ \t]+(created|running)"
+  dataRegex="$APP_NAME[ \t]+$FRAMEWORK[ \t]+(created|1 running)"
   echo "RECEIVED:" $result
   [[ $result =~ $headerRegex ]]
   [[ $result =~ $dataRegex ]]
@@ -156,10 +164,20 @@ EOF
 @test "app info" {
   result=$($KETCH app info "$APP_NAME")
   headerRegex="DEPLOYMENT VERSION[ \t]+IMAGE[ \t]+PROCESS NAME[ \t]+WEIGHT[ \t]+STATE[ \t]+CMD"
-  dataRegex="1[ \t]+$APP_IMAGE[ \t]+web[ \t]+100%[ \t]+created[ \t]"
+  dataRegex="1[ \t]+$APP_IMAGE[ \t]+web[ \t]+100%[ \t]+(created|1 running)[ \t]"
   echo "RECEIVED:" $result
   [[ $result =~ $headerRegex ]]
   [[ $result =~ $dataRegex ]]
+}
+
+@test "app export" {
+  run $KETCH app export "$APP_NAME" -f app.yaml
+  result=$(cat app.yaml)
+  echo "RECEIVED:" $result
+  [[ $result =~ "name: $APP_NAME" ]]
+  [[ $result =~ "type: Application" ]]
+  [[ $result =~ "framework: $FRAMEWORK" ]]
+  rm -f app.yaml
 }
 
 @test "app stop" {
@@ -202,30 +220,6 @@ EOF
   result=$($KETCH app info "$APP_NAME")
   echo "RECEIVED:" $result
   [[ ! $result =~ "Address: http://$CNAME" ]]
-}
-
-@test "unit add" {
- run $KETCH unit add 1 --app "$APP_NAME"
- [[ $status -eq 0 ]]
- result=$(kubectl describe apps $APP_NAME)
- echo "RECEIVED:" $result
- [[ $result =~ "Units:  2" ]] # note two spaces
-}
-
-@test "unit remove" {
- run $KETCH unit remove 1 --app "$APP_NAME"
- [[ $status -eq 0 ]]
-  result=$(kubectl describe apps $APP_NAME)
-  echo "RECEIVED:" $result
- [[ $result =~ "Units:  1" ]] # note two spaces
-}
-
-@test "unit set" {
- run $KETCH unit set 3 --app "$APP_NAME"
- [[ $status -eq 0 ]]
-  result=$(kubectl describe apps $APP_NAME)
-  echo "RECEIVED:" $result
- [[ $result =~ "Units:  3" ]] # note two spaces
 }
 
 @test "env set" {

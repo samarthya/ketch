@@ -36,11 +36,10 @@ jobs:
       services:
         - docker
       provider: script
-      env:
-        - KETCH_EXECUTABLE_PATH="$TRAVIS_BUILD_DIR/bin/ketch"
       script:
         - bash cli_tests/install_kubectl.sh
         - bash cli_tests/install_minikube.sh
         - bash cli_tests/install_bats.sh
         - bash cli_tests/install_ketch.sh
-        - KETCH_EXECUTABLE_PATH="$TRAVIS_BUILD_DIR/bin/ketch" go test ./cli_tests/... -tags integration
+        - bats cli_tests/app.sh
+        - bats cli_tests/job.sh

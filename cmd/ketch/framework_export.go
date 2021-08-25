@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"errors"
-	"os"
+	"io"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/yaml"
 
+	"github.com/shipa-corp/ketch/cmd/ketch/output"
 	ketchv1 "github.com/shipa-corp/ketch/internal/api/v1beta1"
 )
 
@@ -19,9 +18,7 @@ type frameworkExportOptions struct {
 
 const frameworkExportHelp = `Export a framework's configuration file.`
 
-var errFileExists = errors.New("file already exists")
-
-func newFrameworkExportCmd(cfg config) *cobra.Command {
+func newFrameworkExportCmd(cfg config, out io.Writer) *cobra.Command {
 	var options frameworkExportOptions
 
 	cmd := &cobra.Command{
@@ -31,34 +28,20 @@ func newFrameworkExportCmd(cfg config) *cobra.Command {
 		Long:  frameworkExportHelp,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.frameworkName = args[0]
-			return exportFramework(cmd.Context(), cfg, options)
+			return exportFramework(cmd.Context(), cfg, options, out)
 		},
 	}
-	cmd.Flags().StringVarP(&options.filename, "file", "f", "framework.yaml", "filename for framework export")
+	cmd.Flags().StringVarP(&options.filename, "file", "f", "", "filename for framework export")
 	return cmd
 }
 
-func exportFramework(ctx context.Context, cfg config, options frameworkExportOptions) error {
+func exportFramework(ctx context.Context, cfg config, options frameworkExportOptions, out io.Writer) error {
 	var framework ketchv1.Framework
 	err := cfg.Client().Get(ctx, types.NamespacedName{Name: options.frameworkName}, &framework)
 	if err != nil {
 		return err
 	}
 	framework.Spec.Name = framework.Name
-	// open file, err if exist, write framework.Spec
-	_, err = os.Stat(options.filename)
-	if !os.IsNotExist(err) {
-		return errFileExists
-	}
-	f, err := os.Create(options.filename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	b, err := yaml.Marshal(framework.Spec)
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(b)
-	return err
+
+	return output.WriteToFileOrOut(framework.Spec, out, options.filename)
 }

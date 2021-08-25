@@ -4,11 +4,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/shipa-corp/ketch/internal/testutils"
+	"github.com/stretchr/testify/require"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ketchv1 "github.com/shipa-corp/ketch/internal/api/v1beta1"
-
-	"github.com/stretchr/testify/require"
+	"github.com/shipa-corp/ketch/internal/utils/conversions"
 )
 
 func TestGetChangeSetFromYaml(t *testing.T) {
@@ -28,57 +28,41 @@ image: gcr.io/kubernetes/sample-app:latest
 framework: myframework
 description: a test
 builder: heroku/buildpacks:20
-buildPacks: 
+buildPacks:
   - test-buildpack
 environment:
   - PORT=6666
   - FOO=bar
 processes:
   - name: web
-    cmd: python app.py
     units: 1
-    ports:
-      - port: 8888
-        targetPort: 6666
-        protocol: TCP
-    hooks:
-      - restart:
-          before: pwd
-          after: echo "test"
   - name: worker
-    cmd: python app.py
     units: 1
-    ports:
-      - targetPort: 6666
-        port: 8888
-        protocol: TCP
-appUnit: 2
 cname:
   dnsName: test.10.10.10.20`,
 			options: &Options{
-				Timeout: "1m",
-				Wait:    true,
+				Timeout:       "1m",
+				Wait:          true,
+				AppSourcePath: ".",
 			},
 			changeSet: &ChangeSet{
 				appName:              "test",
-				appUnit:              testutils.IntPtr(2),
 				yamlStrictDecoding:   true,
-				sourcePath:           testutils.StrPtr("."),
-				image:                testutils.StrPtr("gcr.io/kubernetes/sample-app:latest"),
-				description:          testutils.StrPtr("a test"),
+				sourcePath:           conversions.StrPtr("."),
+				image:                conversions.StrPtr("gcr.io/kubernetes/sample-app:latest"),
+				description:          conversions.StrPtr("a test"),
 				envs:                 &[]string{"PORT=6666", "FOO=bar"},
-				framework:            testutils.StrPtr("myframework"),
+				framework:            conversions.StrPtr("myframework"),
 				dockerRegistrySecret: nil,
-				builder:              testutils.StrPtr("heroku/buildpacks:20"),
+				builder:              conversions.StrPtr("heroku/buildpacks:20"),
 				buildPacks:           &[]string{"test-buildpack"},
 				cname:                &ketchv1.CnameList{"test.10.10.10.20"},
-				timeout:              testutils.StrPtr("1m"),
-				wait:                 testutils.BoolPtr(true),
+				timeout:              conversions.StrPtr("1m"),
+				wait:                 conversions.BoolPtr(true),
 				processes: &[]ketchv1.ProcessSpec{
 					{
 						Name:  "web",
-						Cmd:   []string{"python", "app.py"},
-						Units: testutils.IntPtr(1),
+						Units: conversions.IntPtr(1),
 						Env: []ketchv1.Env{
 							{
 								Name:  "PORT",
@@ -92,8 +76,7 @@ cname:
 					},
 					{
 						Name:  "worker",
-						Cmd:   []string{"python", "app.py"},
-						Units: testutils.IntPtr(1),
+						Units: conversions.IntPtr(1),
 						Env: []ketchv1.Env{
 							{
 								Name:  "PORT",
@@ -106,38 +89,8 @@ cname:
 						},
 					},
 				},
-				ketchYamlData: &ketchv1.KetchYamlData{
-					Kubernetes: &ketchv1.KetchYamlKubernetesConfig{
-						Processes: map[string]ketchv1.KetchYamlProcessConfig{
-							"web": ketchv1.KetchYamlProcessConfig{
-								Ports: []ketchv1.KetchYamlProcessPortConfig{
-									{
-										Protocol:   "TCP",
-										Port:       8888,
-										TargetPort: 6666,
-									},
-								},
-							},
-							"worker": ketchv1.KetchYamlProcessConfig{
-								Ports: []ketchv1.KetchYamlProcessPortConfig{
-									{
-										Protocol:   "TCP",
-										Port:       8888,
-										TargetPort: 6666,
-									},
-								},
-							},
-						},
-					},
-					Hooks: &ketchv1.KetchYamlHooks{
-						Restart: ketchv1.KetchYamlRestartHooks{
-							Before: []string{"pwd"},
-							After:  []string{"echo \"test\""},
-						},
-					},
-				},
-				version: testutils.StrPtr("v1"),
-				appType: testutils.StrPtr("Application"),
+				appVersion: conversions.StrPtr("v1"),
+				appType:    conversions.StrPtr("Application"),
 			},
 		},
 		{
@@ -148,14 +101,13 @@ image: gcr.io/kubernetes/sample-app:latest`,
 			options: &Options{},
 			changeSet: &ChangeSet{
 				appName:            "test",
-				appUnit:            testutils.IntPtr(1),
 				yamlStrictDecoding: true,
-				image:              testutils.StrPtr("gcr.io/kubernetes/sample-app:latest"),
-				framework:          testutils.StrPtr("myframework"),
-				version:            testutils.StrPtr("v1"),
-				appType:            testutils.StrPtr("Application"),
-				timeout:            testutils.StrPtr(""),
-				wait:               testutils.BoolPtr(false),
+				image:              conversions.StrPtr("gcr.io/kubernetes/sample-app:latest"),
+				framework:          conversions.StrPtr("myframework"),
+				appVersion:         conversions.StrPtr("v1"),
+				appType:            conversions.StrPtr("Application"),
+				timeout:            conversions.StrPtr(""),
+				wait:               conversions.BoolPtr(false),
 			},
 		},
 		{
@@ -185,45 +137,37 @@ image: gcr.io/kubernetes/sample-app:latest
 framework: myframework
 description: a test
 builder: heroku/buildpacks:20
-appUnit: 2
 processes:
   - name: web
     cmd: python app.py
     units: 1
   - name: worker
     cmd: python app.py`,
-			options: &Options{},
+			options: &Options{
+				AppSourcePath: ".",
+			},
 			changeSet: &ChangeSet{
 				appName:            "test",
-				appUnit:            testutils.IntPtr(2),
 				yamlStrictDecoding: true,
-				sourcePath:         testutils.StrPtr("."),
-				image:              testutils.StrPtr("gcr.io/kubernetes/sample-app:latest"),
-				description:        testutils.StrPtr("a test"),
-				builder:            testutils.StrPtr("heroku/buildpacks:20"),
-				framework:          testutils.StrPtr("myframework"),
-				timeout:            testutils.StrPtr(""),
-				wait:               testutils.BoolPtr(false),
+				sourcePath:         conversions.StrPtr("."),
+				image:              conversions.StrPtr("gcr.io/kubernetes/sample-app:latest"),
+				description:        conversions.StrPtr("a test"),
+				builder:            conversions.StrPtr("heroku/buildpacks:20"),
+				framework:          conversions.StrPtr("myframework"),
+				timeout:            conversions.StrPtr(""),
+				wait:               conversions.BoolPtr(false),
 				processes: &[]ketchv1.ProcessSpec{
 					{
 						Name:  "web",
-						Cmd:   []string{"python", "app.py"},
-						Units: testutils.IntPtr(1),
+						Units: conversions.IntPtr(1),
 					},
 					{
 						Name:  "worker",
-						Cmd:   []string{"python", "app.py"},
-						Units: testutils.IntPtr(2),
+						Units: conversions.IntPtr(1),
 					},
 				},
-				version: testutils.StrPtr("v1"),
-				appType: testutils.StrPtr("Application"),
-				ketchYamlData: &ketchv1.KetchYamlData{
-					Hooks: &ketchv1.KetchYamlHooks{
-						Restart: ketchv1.KetchYamlRestartHooks{},
-					},
-					Kubernetes: &ketchv1.KetchYamlKubernetesConfig{Processes: map[string]ketchv1.KetchYamlProcessConfig{}},
-				},
+				appVersion: conversions.StrPtr("v1"),
+				appType:    conversions.StrPtr("Application"),
 			},
 		},
 		{
@@ -235,14 +179,13 @@ image: gcr.io/kubernetes/sample-app:latest
 			options: &Options{},
 			changeSet: &ChangeSet{
 				appName:            "test",
-				appUnit:            testutils.IntPtr(1),
 				yamlStrictDecoding: true,
-				image:              testutils.StrPtr("gcr.io/kubernetes/sample-app:latest"),
-				framework:          testutils.StrPtr("myframework"),
-				version:            testutils.StrPtr("v1"),
-				appType:            testutils.StrPtr("Application"),
-				timeout:            testutils.StrPtr(""),
-				wait:               testutils.BoolPtr(false),
+				image:              conversions.StrPtr("gcr.io/kubernetes/sample-app:latest"),
+				framework:          conversions.StrPtr("myframework"),
+				appVersion:         conversions.StrPtr("v1"),
+				appType:            conversions.StrPtr("Application"),
+				timeout:            conversions.StrPtr(""),
+				wait:               conversions.BoolPtr(false),
 			},
 		},
 		{
@@ -254,7 +197,7 @@ environment:
   - bad:variable
 `,
 			options: &Options{},
-			errStr:  errEnvvarFormat.Error(),
+			errStr:  "env variables should have NAME=VALUE format",
 		},
 	}
 	for _, tt := range tests {
@@ -273,6 +216,103 @@ environment:
 				require.Nil(t, err)
 				require.Equal(t, tt.changeSet, cs)
 			}
+		})
+	}
+}
+
+func TestGetApplicationFromKetchApp(t *testing.T) {
+	tests := []struct {
+		description string
+		app         ketchv1.App
+		application *Application
+	}{
+		{
+			description: "minimum required fields",
+			app: ketchv1.App{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: ketchv1.AppSpec{
+					Framework: "myframework",
+				},
+			},
+			application: &Application{
+				Type:      conversions.StrPtr(typeApplication),
+				Name:      conversions.StrPtr("test"),
+				Framework: conversions.StrPtr("myframework"),
+			},
+		},
+		{
+			description: "all fields",
+			app: ketchv1.App{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "test",
+				},
+				Spec: ketchv1.AppSpec{
+					Framework:      "myframework",
+					Version:        conversions.StrPtr("v1"),
+					Description:    "a test",
+					Env:            []ketchv1.Env{{Name: "TEST_KEY", Value: "TEST_VALUE"}},
+					DockerRegistry: ketchv1.DockerRegistrySpec{SecretName: "a_secret"},
+					Builder:        "builder",
+					BuildPacks:     []string{"test/buildpack"},
+					Deployments: []ketchv1.AppDeploymentSpec{
+						{
+							Version: ketchv1.DeploymentVersion(1), // not latest deployment
+							Image:   "gcr.io/shipa-ci/sample-go-app:not_latest",
+						},
+						{
+							Version: ketchv1.DeploymentVersion(3),
+							Image:   "gcr.io/shipa-ci/sample-go-app:latest",
+							Processes: []ketchv1.ProcessSpec{
+								{Name: "process-1", Units: conversions.IntPtr(1)},
+								{Name: "process-2", Units: conversions.IntPtr(2)},
+								{Name: "process-3", Units: conversions.IntPtr(1)},
+							},
+						},
+						{
+							Version: ketchv1.DeploymentVersion(2), // not latest deployment
+							Image:   "gcr.io/shipa-ci/sample-go-app:not_latest",
+						},
+					},
+					Ingress: ketchv1.IngressSpec{Cnames: []string{"test.com", "another.com"}},
+				},
+			},
+			application: &Application{
+				Version:        conversions.StrPtr("v1"),
+				Type:           conversions.StrPtr(typeApplication),
+				Name:           conversions.StrPtr("test"),
+				Image:          conversions.StrPtr("gcr.io/shipa-ci/sample-go-app:latest"),
+				Framework:      conversions.StrPtr("myframework"),
+				Description:    conversions.StrPtr("a test"),
+				Environment:    []string{"TEST_KEY=TEST_VALUE"},
+				RegistrySecret: conversions.StrPtr("a_secret"),
+				Builder:        conversions.StrPtr("builder"),
+				BuildPacks:     []string{"test/buildpack"},
+				CName: &CName{
+					DNSName: "test.com",
+				},
+				Processes: []Process{
+					{
+						Name:  "process-1",
+						Units: conversions.IntPtr(1),
+					},
+					{
+						Name:  "process-2",
+						Units: conversions.IntPtr(2),
+					},
+					{
+						Name:  "process-3",
+						Units: conversions.IntPtr(1),
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			res := GetApplicationFromKetchApp(tt.app)
+			require.Equal(t, tt.application, res)
 		})
 	}
 }

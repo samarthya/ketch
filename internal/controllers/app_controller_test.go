@@ -6,20 +6,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/shipa-corp/ketch/internal/testutils"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v3/pkg/release"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ketchv1 "github.com/shipa-corp/ketch/internal/api/v1beta1"
 	"github.com/shipa-corp/ketch/internal/chart"
 	"github.com/shipa-corp/ketch/internal/templates"
+	"github.com/shipa-corp/ketch/internal/utils/conversions"
 )
 
 func stringRef(s string) *string {
@@ -43,8 +42,8 @@ type helm struct {
 	deleteChartCalled  []string
 }
 
-func (h *helm) UpdateChart(appChrt chart.ApplicationChart, config chart.ChartConfig, opts ...chart.InstallOption) (*release.Release, error) {
-	return nil, h.updateChartResults[appChrt.AppName()]
+func (h *helm) UpdateChart(tv chart.TemplateValuer, config chart.ChartConfig, opts ...chart.InstallOption) (*release.Release, error) {
+	return nil, h.updateChartResults[tv.GetName()]
 }
 
 func (h *helm) DeleteChart(appName string) error {
@@ -54,14 +53,14 @@ func (h *helm) DeleteChart(appName string) error {
 
 func TestAppReconciler_Reconcile(t *testing.T) {
 
-	defaultObjects := []runtime.Object{
+	defaultObjects := []client.Object{
 		&ketchv1.Framework{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "working-framework",
 			},
 			Spec: ketchv1.FrameworkSpec{
 				NamespaceName: "hello",
-				AppQuotaLimit: testutils.IntPtr(100),
+				AppQuotaLimit: conversions.IntPtr(100),
 				IngressController: ketchv1.IngressControllerSpec{
 					IngressType: ketchv1.IstioIngressControllerType,
 				},
@@ -73,7 +72,7 @@ func TestAppReconciler_Reconcile(t *testing.T) {
 			},
 			Spec: ketchv1.FrameworkSpec{
 				NamespaceName: "second-namespace",
-				AppQuotaLimit: testutils.IntPtr(1),
+				AppQuotaLimit: conversions.IntPtr(1),
 				IngressController: ketchv1.IngressControllerSpec{
 					IngressType: ketchv1.IstioIngressControllerType,
 				},
@@ -181,7 +180,7 @@ func TestAppReconciler_Reconcile(t *testing.T) {
 					break
 				}
 			}
-			condition := resultApp.Status.Condition(ketchv1.AppScheduled)
+			condition := resultApp.Status.Condition(ketchv1.Scheduled)
 			require.NotNil(t, condition)
 			require.Equal(t, tt.wantConditionStatus, condition.Status)
 			assert.Equal(t, tt.wantConditionMessage, condition.Message)

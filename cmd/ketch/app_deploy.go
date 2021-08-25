@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/shipa-corp/ketch/internal/deploy"
+	"github.com/shipa-corp/ketch/internal/validation"
 )
 
 const (
@@ -25,6 +26,10 @@ Details about Procfile conventions can be found here: https://devcenter.heroku.c
 Deploy from an image:
   ketch app deploy <app name> -i myregistry/myimage:latest
 
+Users can deploy from image or source code by passing a filename such as app.yaml containing fields like:
+	name: test
+	image: gcr.io/shipa-ci/sample-go-app:latest
+	framework: myframework
 `
 )
 
@@ -33,7 +38,7 @@ func newAppDeployCmd(cfg config, params *deploy.Services, configDefaultBuilder s
 	var options deploy.Options
 
 	cmd := &cobra.Command{
-		Use:   "deploy APPNAME [SOURCE DIRECTORY]",
+		Use:   "deploy [APPNAME|FILENAME] [SOURCE DIRECTORY]",
 		Short: "Deploy an app.",
 		Long:  appDeployHelp,
 		Args:  cobra.RangeArgs(1, 2),
@@ -66,7 +71,11 @@ func newAppDeployCmd(cfg config, params *deploy.Services, configDefaultBuilder s
 	cmd.Flags().StringVarP(&options.Framework, deploy.FlagFramework, deploy.FlagFrameworkShort, "", "Framework to deploy your app.")
 	cmd.Flags().StringVarP(&options.DockerRegistrySecret, deploy.FlagRegistrySecret, "", "", "A name of a Secret with docker credentials. This secret must be created in the same namespace of the framework.")
 	cmd.Flags().StringVar(&options.Builder, deploy.FlagBuilder, "", "Builder to use when building from source.")
-	cmd.Flags().StringSliceVar(&options.BuildPacks, deploy.FlagBuildPacks, nil, "A list of build packs")
+	cmd.Flags().StringSliceVar(&options.BuildPacks, deploy.FlagBuildPacks, nil, "A list of build packs.")
+
+	cmd.Flags().IntVar(&options.Units, deploy.FlagUnits, 1, "Set number of units for deployment.")
+	cmd.Flags().IntVar(&options.Version, deploy.FlagVersion, 1, "Specify version whose units to update. Must be used with units flag!")
+	cmd.Flags().StringVar(&options.Process, deploy.FlagProcess, "", "Specify process whose units to update. Must be used with units flag!")
 
 	cmd.RegisterFlagCompletionFunc(deploy.FlagFramework, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return autoCompleteFrameworkNames(cfg, toComplete)

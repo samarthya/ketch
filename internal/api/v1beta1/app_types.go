@@ -132,36 +132,11 @@ const (
 	AppRunning AppPhase = "Running"
 )
 
-type AppConditionType string
-
-// These are valid conditions of app.
-const (
-
-	// AppScheduled indicates whether the has been processed by ketch-controller.
-	AppScheduled AppConditionType = "Scheduled"
-)
-
-// AppCondition contains details for the current condition of this app.
-type AppCondition struct {
-
-	// Type of the condition.
-	Type AppConditionType `json:"type"`
-
-	// Status of the condition.
-	Status v1.ConditionStatus `json:"status"`
-
-	// LastTransitionTime is the timestamp corresponding to the last status.
-	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty"`
-
-	// A human readable message indicating details about why the application is in this condition.
-	Message string `json:"message,omitempty"`
-}
-
 // AppStatus represents information about the status of an application.
 type AppStatus struct {
 
 	// Conditions of App resource.
-	Conditions []AppCondition `json:"conditions,omitempty"`
+	Conditions []Condition `json:"conditions,omitempty"`
 
 	Framework *v1.ObjectReference `json:"framework,omitempty"`
 }
@@ -214,7 +189,7 @@ type AppSpec struct {
 	Ingress IngressSpec `json:"ingress"`
 
 	// DockerRegistry contains docker registry configuration of the application.
-	DockerRegistry DockerRegistrySpec `json:"dockerRegisty,omitempty"`
+	DockerRegistry DockerRegistrySpec `json:"dockerRegistry,omitempty"`
 
 	// Builder is the name of the builder used to build source code.
 	Builder string `json:"builder,omitempty"`
@@ -263,30 +238,6 @@ func (s *AppDeploymentSpec) setUnitsForAllProcess(units int) {
 	}
 }
 
-func (s *AppDeploymentSpec) addUnits(process string, units int) error {
-	for i, processSpec := range s.Processes {
-		if processSpec.Name == process {
-			currentUnits := DefaultNumberOfUnits
-			if processSpec.Units != nil {
-				currentUnits = *processSpec.Units
-			}
-			newUnits := currentUnits + units
-			if newUnits < 0 {
-				newUnits = 0
-			}
-			s.Processes[i].Units = &newUnits
-			return nil
-		}
-	}
-	return ErrProcessNotFound
-}
-
-func (s *AppDeploymentSpec) addUnitsForAllProcess(units int) {
-	for _, processSpec := range s.Processes {
-		_ = s.addUnits(processSpec.Name, units)
-	}
-}
-
 // SetUnits set quantity of units of the specified processes.
 func (app *App) SetUnits(selector Selector, units int) error {
 	deploymentFound := false
@@ -300,28 +251,6 @@ func (app *App) SetUnits(selector Selector, units int) error {
 			}
 		} else {
 			deploymentSpec.setUnitsForAllProcess(units)
-		}
-		deploymentFound = true
-	}
-	if selector.DeploymentVersion != nil && !deploymentFound {
-		return ErrDeploymentNotFound
-	}
-	return nil
-}
-
-// AddUnits add units to the specified processes.
-func (app *App) AddUnits(selector Selector, units int) error {
-	deploymentFound := false
-	for _, deploymentSpec := range app.Spec.Deployments {
-		if selector.DeploymentVersion != nil && *selector.DeploymentVersion != deploymentSpec.Version {
-			continue
-		}
-		if selector.Process != nil {
-			if err := deploymentSpec.addUnits(*selector.Process, units); err != nil {
-				return err
-			}
-		} else {
-			deploymentSpec.addUnitsForAllProcess(units)
 		}
 		deploymentFound = true
 	}
@@ -488,8 +417,8 @@ func (app *App) ExposedPorts() map[DeploymentVersion][]ExposedPort {
 }
 
 // SetCondition sets Status and message fields of the given type of condition to the provided values.
-func (app *App) SetCondition(t AppConditionType, status v1.ConditionStatus, message string, time metav1.Time) {
-	c := AppCondition{
+func (app *App) SetCondition(t ConditionType, status v1.ConditionStatus, message string, time metav1.Time) {
+	c := Condition{
 		Type:               t,
 		Status:             status,
 		LastTransitionTime: &time,
@@ -521,7 +450,7 @@ func (app *App) Phase() AppPhase {
 }
 
 // Condition looks for a condition with the provided type in the condition list and returns it.
-func (s AppStatus) Condition(t AppConditionType) *AppCondition {
+func (s AppStatus) Condition(t ConditionType) *Condition {
 	for _, c := range s.Conditions {
 		if c.Type == t {
 			return &c

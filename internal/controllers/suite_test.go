@@ -19,10 +19,13 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	"golang.org/x/mod/semver"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,17 +39,40 @@ import (
 )
 
 type testingContext struct {
-	env       *envtest.Environment
-	done      chan struct{}
+	env *envtest.Environment
+	context.Context
 	k8sClient client.Client
+	cancel    context.CancelFunc
 }
 
-func setup(reader templates.Reader, helm Helm, objects []runtime.Object) (*testingContext, error) {
+func verifyKubeApiServerVersion() error {
+	kubeApiServer := "kube-apiserver"
+	if value := os.Getenv("TEST_ASSET_KUBE_APISERVER"); value != "" {
+		kubeApiServer = value
+	}
+	b, err := exec.Command(kubeApiServer, "--version").CombinedOutput()
+	if err != nil {
+		return err
+	}
+	version := strings.TrimSpace(strings.TrimLeft(string(b), "Kubernetes"))
+	if semver.Compare(version, "v1.16.0") < 0 {
+		return fmt.Errorf("kube-apiserver --version must be >= 1.16, got %s", version)
+	}
+	return nil
+}
+
+func setup(reader templates.Reader, helm Helm, objects []client.Object) (*testingContext, error) {
+	err := verifyKubeApiServerVersion()
+	if err != nil {
+		return nil, err
+	}
+	cancelCtx, cancel := context.WithCancel(context.Background())
 	ctx := &testingContext{
-		done: make(chan struct{}),
+		Context: cancelCtx,
 		env: &envtest.Environment{
 			CRDDirectoryPaths: []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		},
+		cancel: cancel,
 	}
 	cfg, err := ctx.env.Start()
 	if err != nil {
@@ -75,6 +101,18 @@ func setup(reader templates.Reader, helm Helm, objects []runtime.Object) (*testi
 	if err != nil {
 		return nil, err
 	}
+	err = (&JobReconciler{
+		Client:         k8sManager.GetClient(),
+		Log:            ctrl.Log.WithName("controllers").WithName("Job"),
+		TemplateReader: reader,
+		HelmFactoryFn: func(namespace string) (Helm, error) {
+			return helm, nil
+		},
+		Recorder: k8sManager.GetEventRecorderFor("Job"),
+	}).SetupWithManager(k8sManager)
+	if err != nil {
+		return nil, err
+	}
 	err = (&FrameworkReconciler{
 		Client: k8sManager.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("Framework"),
@@ -84,7 +122,7 @@ func setup(reader templates.Reader, helm Helm, objects []runtime.Object) (*testi
 	}
 
 	go func() {
-		_ = k8sManager.Start(ctx.done)
+		_ = k8sManager.Start(ctx)
 	}()
 
 	for _, obj := range objects {
@@ -102,6 +140,8 @@ func setup(reader templates.Reader, helm Helm, objects []runtime.Object) (*testi
 			name = x.Name
 		case *ketchv1.App:
 			name = x.Name
+		case *ketchv1.Job:
+			name = x.Name
 		}
 		key := types.NamespacedName{Name: name}
 		if err = ctx.k8sClient.Get(context.TODO(), key, obj); err != nil {
@@ -116,6 +156,10 @@ func setup(reader templates.Reader, helm Helm, objects []runtime.Object) (*testi
 			if len(x.Status.Conditions) == 0 {
 				return nil, fmt.Errorf("failed to run %v app", x.Name)
 			}
+		case *ketchv1.Job:
+			if x.Status.Framework.String() == "" {
+				return nil, fmt.Errorf("failed to run %v job", x.Name)
+			}
 		}
 	}
 	return ctx, nil
@@ -125,7 +169,7 @@ func teardown(ctx *testingContext) {
 	if ctx == nil {
 		return
 	}
-	ctx.done <- struct{}{}
+	ctx.cancel()
 	err := ctx.env.Stop()
 	if err != nil {
 		panic(err)

@@ -44,8 +44,7 @@ type FrameworkReconciler struct {
 // +kubebuilder:rbac:groups=theketch.io,resources=frameworks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=theketch.io,resources=frameworks/status,verbs=get;update;patch
 
-func (r *FrameworkReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *FrameworkReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("framework", req.NamespacedName)
 
 	framework := ketchv1.Framework{}
@@ -68,6 +67,7 @@ func (r *FrameworkReconciler) reconcile(ctx context.Context, framework *ketchv1.
 			Phase:     ketchv1.FrameworkFailed,
 			Message:   "failed to get a list of frameworks",
 			Apps:      framework.Status.Apps,
+			Jobs:      framework.Status.Jobs,
 			Namespace: framework.Status.Namespace,
 		}
 	}
@@ -83,6 +83,7 @@ func (r *FrameworkReconciler) reconcile(ctx context.Context, framework *ketchv1.
 				Phase:     ketchv1.FrameworkFailed,
 				Message:   fmt.Sprintf("failed to get %s namespace", framework.Spec.NamespaceName),
 				Apps:      framework.Status.Apps,
+				Jobs:      framework.Status.Jobs,
 				Namespace: framework.Status.Namespace,
 			}
 		}
@@ -101,6 +102,7 @@ func (r *FrameworkReconciler) reconcile(ctx context.Context, framework *ketchv1.
 					Phase:     ketchv1.FrameworkFailed,
 					Message:   fmt.Sprintf("failed to create %s namespace", framework.Spec.NamespaceName),
 					Apps:      framework.Status.Apps,
+					Jobs:      framework.Status.Jobs,
 					Namespace: framework.Status.Namespace,
 				}
 			}
@@ -125,6 +127,7 @@ func (r *FrameworkReconciler) reconcile(ctx context.Context, framework *ketchv1.
 			Phase:     ketchv1.FrameworkFailed,
 			Message:   fmt.Sprintf("failed to update namespace annotations: %v", err),
 			Apps:      framework.Status.Apps,
+			Jobs:      framework.Status.Jobs,
 			Namespace: framework.Status.Namespace,
 		}
 	}
@@ -135,6 +138,7 @@ func (r *FrameworkReconciler) reconcile(ctx context.Context, framework *ketchv1.
 			Phase:     ketchv1.FrameworkFailed,
 			Message:   fmt.Sprintf("failed to get a reference to %s namespace", framework.Spec.NamespaceName),
 			Apps:      framework.Status.Apps,
+			Jobs:      framework.Status.Jobs,
 			Namespace: framework.Status.Namespace,
 		}
 	}
@@ -148,6 +152,7 @@ func (r *FrameworkReconciler) reconcile(ctx context.Context, framework *ketchv1.
 				Phase:     ketchv1.FrameworkFailed,
 				Message:   "Target namespace is already used by another framework",
 				Apps:      framework.Status.Apps,
+				Jobs:      framework.Status.Jobs,
 				Namespace: framework.Status.Namespace,
 			}
 		}
@@ -156,6 +161,7 @@ func (r *FrameworkReconciler) reconcile(ctx context.Context, framework *ketchv1.
 		Namespace: ref,
 		Phase:     ketchv1.FrameworkCreated,
 		Apps:      framework.Status.Apps,
+		Jobs:      framework.Status.Jobs,
 	}
 }
 

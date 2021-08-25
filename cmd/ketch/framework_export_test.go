@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"testing"
+
+	"github.com/shipa-corp/ketch/cmd/ketch/output"
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -11,7 +14,7 @@ import (
 
 	ketchv1 "github.com/shipa-corp/ketch/internal/api/v1beta1"
 	"github.com/shipa-corp/ketch/internal/mocks"
-	"github.com/shipa-corp/ketch/internal/testutils"
+	"github.com/shipa-corp/ketch/internal/utils/conversions"
 )
 
 func TestExportFramework(t *testing.T) {
@@ -19,7 +22,7 @@ func TestExportFramework(t *testing.T) {
 		Version:       "v1",
 		NamespaceName: "ketch-myframework",
 		Name:          "myframework",
-		AppQuotaLimit: testutils.IntPtr(1),
+		AppQuotaLimit: conversions.IntPtr(1),
 		IngressController: ketchv1.IngressControllerSpec{
 			ClassName:       "traefik",
 			ServiceEndpoint: "10.10.20.30",
@@ -54,6 +57,24 @@ version: v1
 `,
 		},
 		{
+			name: "success - stdout",
+			cfg: &mocks.Configuration{
+				CtrlClientObjects:    []runtime.Object{mockFramework},
+				DynamicClientObjects: []runtime.Object{},
+			},
+			options: frameworkExportOptions{frameworkName: "myframework"},
+			expected: `appQuotaLimit: 1
+ingressController:
+  className: traefik
+  clusterIssuer: letsencrypt
+  serviceEndpoint: 10.10.20.30
+  type: traefik
+name: myframework
+namespace: ketch-myframework
+version: v1
+`,
+		},
+		{
 			name: "error - file exists",
 			cfg: &mocks.Configuration{
 				CtrlClientObjects:    []runtime.Object{mockFramework},
@@ -63,7 +84,7 @@ version: v1
 			before: func() {
 				os.WriteFile("test-framework.yaml", []byte("data"), os.ModePerm)
 			},
-			err: errFileExists,
+			err: output.ErrFileExists,
 		},
 	}
 	for _, tt := range tests {
@@ -72,16 +93,21 @@ version: v1
 			if tt.before != nil {
 				tt.before()
 			}
-			err := exportFramework(context.Background(), tt.cfg, tt.options)
+			buf := &bytes.Buffer{}
+			err := exportFramework(context.Background(), tt.cfg, tt.options, buf)
 			if tt.err != nil {
 				require.Equal(t, tt.err, err)
 				return
 			} else {
 				require.Nil(t, err)
 			}
-			data, err := os.ReadFile(tt.options.filename)
-			require.Nil(t, err)
-			require.Equal(t, tt.expected, string(data))
+			if tt.options.filename != "" {
+				data, err := os.ReadFile(tt.options.filename)
+				require.Nil(t, err)
+				require.Equal(t, tt.expected, string(data))
+			} else {
+				require.Equal(t, tt.expected, buf.String())
+			}
 		})
 	}
 }
