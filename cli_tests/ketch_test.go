@@ -140,13 +140,9 @@ ingressController:
 
 func TestFrameworkExport(t *testing.T) {
 	b, err := exec.Command(ketch, "framework", "export", frameworkCliName).CombinedOutput()
+	fmt.Println(string(b))
 	require.Nil(t, err, string(b))
-	defer os.Remove("framework.yaml")
-	b, err = os.ReadFile("framework.yaml")
-	require.Nil(t, err, string(b))
-	require.Contains(t, string(b), fmt.Sprintf("name: %s", frameworkCliName), string(b))
-	require.Contains(t, string(b), fmt.Sprintf("namespace: ketch-%s", frameworkCliName), string(b))
-	require.Contains(t, string(b), "appQuotaLimit: 2", string(b))
+	require.True(t, regexp.MustCompile("appQuotaLimit: 2\ningressController:\n  className: traefik\n  serviceEndpoint: '''10.110.30.233'''\n  type: traefik\nname: myframework\nnamespace: ketch-myframework").Match(b), string(b))
 }
 
 func TestAppDeploy(t *testing.T) {
