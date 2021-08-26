@@ -23,7 +23,8 @@ var (
 	frameworkCliName  = "myframework"
 	frameworkYamlName = "myframework-yaml"
 	appImage          = "gcr.io/shipa-ci/sample-go-app:latest"
-	appName           = "sample-app"
+	appCliName        = "sample-app"
+	appYamlName       = "sample-yaml-app"
 	cName             = "my-cname.com"
 	testEnvvarKey     = "FOO"
 	testEnvVarValue   = "BAR"
@@ -123,6 +124,7 @@ func TestFrameworkUpdateByCli(t *testing.T) {
 	require.Nil(t, err, string(b))
 	require.Contains(t, string(b), "Successfully updated!", string(b))
 }
+
 func TestFrameworkUpdateByYaml(t *testing.T) {
 	temp, err := os.CreateTemp(t.TempDir(), "*.yaml")
 	require.Nil(t, err)
@@ -140,41 +142,92 @@ ingressController:
 
 func TestFrameworkExport(t *testing.T) {
 	b, err := exec.Command(ketch, "framework", "export", frameworkCliName).CombinedOutput()
-	fmt.Println(string(b))
 	require.Nil(t, err, string(b))
+	// FIXME: the quotes around serviceEndpoint are incorrect
 	require.True(t, regexp.MustCompile("appQuotaLimit: 2\ningressController:\n  className: traefik\n  serviceEndpoint: '''10.110.30.233'''\n  type: traefik\nname: myframework\nnamespace: ketch-myframework").Match(b), string(b))
 }
 
 func TestAppDeploy(t *testing.T) {
-	b, err := exec.Command(ketch, "app", "deploy", appName, "--framework", frameworkCliName, "-i", appImage).CombinedOutput()
+	b, err := exec.Command(ketch, "app", "deploy", appCliName, "--framework", frameworkCliName, "-i", appImage).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Equal(t, "", string(b))
 }
 
-func TestAppInfo(t *testing.T) {
-	err := retry(ketch, []string{"app", "info", appName}, "", "running", 20, 5)
+func TestAppDeployByYaml(t *testing.T) {
+	temp, err := os.CreateTemp(t.TempDir(), "*.yaml")
+	require.Nil(t, err)
+	defer os.Remove(temp.Name())
+	temp.WriteString(fmt.Sprintf(`name: "%s"
+version: v1
+type: Application
+image: %s
+framework: %s
+description: cli test app by yaml`, appYamlName, appImage, frameworkCliName))
+	b, err := exec.Command(ketch, "app", "deploy", temp.Name()).CombinedOutput()
+	require.Nil(t, err, string(b))
+
+	err = retry(ketch, []string{"app", "info", appYamlName}, "", "running", 20, 5)
+	require.Nil(t, err)
+}
+
+// func TestAppUnitSet(t *testing.T) {
+// 	b, err := exec.Command(ketch, "app", "deploy", appCliName, "--framework", frameworkCliName, "-i", appImage, "--units", "3").CombinedOutput()
+// 	require.Nil(t, err, string(b))
+//
+// 	b, err = exec.Command("kubectl", "describe", "apps", appCliName).CombinedOutput()
+// 	require.Nil(t, err, string(b))
+// 	require.True(t, regexp.MustCompile("Units:  3").Match(b), string(b)) // note two spaces
+// }
+
+func TestAppList(t *testing.T) {
+	err := retry(ketch, []string{"app", "list"}, "", "1 running", 4, 4)
 	require.Nil(t, err)
 
-	b, err := exec.Command(ketch, "app", "info", appName).CombinedOutput()
+	b, err := exec.Command(ketch, "app", "list").CombinedOutput()
+	require.Nil(t, err, string(b))
+
+	require.True(t, regexp.MustCompile("NAME[ \t]+FRAMEWORK[ \t]+STATE[ \t]+ADDRESSES[ \t]+BUILDER[ \t]+DESCRIPTION").Match(b), string(b))
+	require.True(t, regexp.MustCompile(fmt.Sprintf("%s[ \t]+%s[ \t]+(created|1 running)", appCliName, frameworkCliName)).Match(b), string(b))
+}
+
+func TestAppExport(t *testing.T) {
+	b, err := exec.Command(ketch, "app", "export", appYamlName).CombinedOutput()
+	require.Nil(t, err, string(b))
+	require.True(t, regexp.MustCompile(fmt.Sprintf(`description: cli test app by yaml
+framework: %s
+image: %s
+name: %s
+processes:
+- name: web
+  units: 1
+type: Application
+version: v1`, frameworkCliName, appImage, appYamlName)).Match(b), string(b))
+}
+
+func TestAppInfo(t *testing.T) {
+	err := retry(ketch, []string{"app", "info", appCliName}, "", "running", 20, 5)
+	require.Nil(t, err)
+
+	b, err := exec.Command(ketch, "app", "info", appCliName).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.True(t, regexp.MustCompile("DEPLOYMENT VERSION[ \t]+IMAGE[ \t]+PROCESS NAME[ \t]+WEIGHT[ \t]+STATE[ \t]+CMD").Match(b), string(b))
 	require.True(t, regexp.MustCompile(fmt.Sprintf("1[ \t]+%s[ \t]+web[ \t]+100%%[ \t]+[0-9] running[ \t]", appImage)).Match(b), string(b))
 }
 
 func TestAppStop(t *testing.T) {
-	b, err := exec.Command(ketch, "app", "stop", appName).CombinedOutput()
+	b, err := exec.Command(ketch, "app", "stop", appCliName).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Equal(t, "Successfully stopped!\n", string(b))
 }
 
 func TestAppStart(t *testing.T) {
-	b, err := exec.Command(ketch, "app", "start", appName).CombinedOutput()
+	b, err := exec.Command(ketch, "app", "start", appCliName).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Equal(t, "Successfully started!\n", string(b))
 }
 
 func TestAppLog(t *testing.T) {
-	err := exec.Command(ketch, "app", "log", appName).Run()
+	err := exec.Command(ketch, "app", "log", appCliName).Run()
 	require.Nil(t, err)
 }
 
@@ -186,48 +239,56 @@ func TestBuilderList(t *testing.T) {
 }
 
 func TestCnameAddRemove(t *testing.T) {
-	err := exec.Command(ketch, "cname", "add", cName, "--app", appName).Run()
+	err := exec.Command(ketch, "cname", "add", cName, "--app", appCliName).Run()
 	require.Nil(t, err)
-	b, err := exec.Command(ketch, "app", "info", appName).CombinedOutput()
+	b, err := exec.Command(ketch, "app", "info", appCliName).CombinedOutput()
 	require.Nil(t, err)
 	require.True(t, regexp.MustCompile(fmt.Sprintf("Address: http://%s", cName)).Match(b), string(b))
 }
 
 func TestEnvSet(t *testing.T) {
-	err := exec.Command(ketch, "env", "set", fmt.Sprintf("%s=%s", testEnvvarKey, testEnvVarValue), "--app", appName).Run()
+	err := exec.Command(ketch, "env", "set", fmt.Sprintf("%s=%s", testEnvvarKey, testEnvVarValue), "--app", appCliName).Run()
 	require.Nil(t, err)
 }
 
 func TestEnvGet(t *testing.T) {
-	b, err := exec.Command(ketch, "env", "get", testEnvvarKey, "--app", appName).CombinedOutput()
+	b, err := exec.Command(ketch, "env", "get", testEnvvarKey, "--app", appCliName).CombinedOutput()
 	require.Nil(t, err)
 	require.Contains(t, string(b), testEnvVarValue, string(b))
 }
 
 func TestEnvUnset(t *testing.T) {
-	err := exec.Command(ketch, "env", "unset", testEnvvarKey, "--app", appName).Run()
+	err := exec.Command(ketch, "env", "unset", testEnvvarKey, "--app", appCliName).Run()
 	require.Nil(t, err)
-	b, err := exec.Command(ketch, "env", "get", testEnvvarKey, "--app", appName).CombinedOutput()
+	b, err := exec.Command(ketch, "env", "get", testEnvvarKey, "--app", appCliName).CombinedOutput()
 	require.Nil(t, err)
 	require.NotContainsf(t, string(b), testEnvVarValue, string(b))
 }
 
-func TestAppRemove(t *testing.T) {
-	b, err := exec.Command(ketch, "app", "remove", appName).CombinedOutput()
+func TestAppByCliRemove(t *testing.T) {
+	b, err := exec.Command(ketch, "app", "remove", appCliName).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Contains(t, string(b), "Successfully removed!")
-	err = retry(ketch, []string{"app", "info", appName}, "", "not found", 4, 4)
+	err = retry(ketch, []string{"app", "info", appCliName}, "", "not found", 4, 4)
+	require.Nil(t, err)
+}
+
+func TestAppByYamlRemove(t *testing.T) {
+	b, err := exec.Command(ketch, "app", "remove", appYamlName).CombinedOutput()
+	require.Nil(t, err, string(b))
+	require.Contains(t, string(b), "Successfully removed!")
+	err = retry(ketch, []string{"app", "info", appYamlName}, "", "not found", 4, 4)
 	require.Nil(t, err)
 }
 
 func TestFrameworkByCliRemove(t *testing.T) {
-	// framework remove may complain that apps are still running if tests run too fast
+	// retry because framework remove may complain that apps are still running if tests run too fast
 	err := retry(ketch, []string{"framework", "remove", frameworkCliName}, fmt.Sprintf("ketch-%s", frameworkCliName), "Framework successfully removed!", 3, 3)
 	require.Nil(t, err)
 }
 
 func TestFrameworkByYamlRemove(t *testing.T) {
-	// framework remove may complain that apps are still running if tests run too fast
+	// retrun because framework remove may complain that apps are still running if tests run too fast
 	err := retry(ketch, []string{"framework", "remove", frameworkYamlName}, fmt.Sprintf("ketch-%s", frameworkYamlName), "Framework successfully removed!", 3, 3)
 	require.Nil(t, err)
 }
