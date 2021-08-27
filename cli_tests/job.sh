@@ -87,19 +87,25 @@ EOF
   count=0
   until [[ $count -ge 5 ]]
   do
-    result=$(kubectl get job -A)
-    if [[ $result =~ $JOB_NAME ]]
+    # result=$(kubectl get job -n "ketch-$JOB_FRAMEWORK")
+    result=$(kubectl describe job "$JOB_NAME" -n "ketch-$JOB_FRAMEWORK" || echo false)
+    completionsRegex="Completions: *2" # variable spaces
+    if [[ $result =~ $completionsRegex ]]
+    # if [[ $result =~ "/2" ]]
       then break
     fi
     count+=1
     sleep 7
   done
 
-  result=$(kubectl get job "$JOB_NAME" -n "ketch-$JOB_FRAMEWORK")
-  completionsRegex="[0-2]/2" # completions probably won't be finished - may be 0/2 or 1/2
-  echo "RECEIVED:" $result
-  [[ $result =~ $completionsRegex ]]
+  # res=$(kubectl get job "$JOB_NAME" -n "ketch-$JOB_FRAMEWORK")
+  # [[ $res =~ "/2" ]]
 
+  # result=$(kubectl get job "$JOB_NAME" -n "ketch-$JOB_FRAMEWORK")
+  # completionsRegex="[0-2]/2" # completions probably won't be finished - may be 0/2 or 1/2
+  # echo "RECEIVED:" $result
+  # [[ $result =~ $completionsRegex ]]
+  #
   result=$(kubectl describe job "$JOB_NAME" -n "ketch-$JOB_FRAMEWORK")
   completionsRegex="Completions: *2" # variable spaces
   parallelismRegex="Parallelism: *2" # variable spaces
