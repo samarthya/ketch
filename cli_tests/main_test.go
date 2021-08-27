@@ -38,7 +38,6 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("PWD", pwd)
 	ketch = filepath.Join(pwd, "bin", "ketch")
 }
 
