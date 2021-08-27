@@ -3,6 +3,7 @@
 package cli_tests
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -50,12 +51,16 @@ func TestFrameworkByCLI(t *testing.T) {
 	b, err = exec.Command(ketch, "framework", "export", frameworkCliName).CombinedOutput()
 	require.Nil(t, err, string(b))
 	// FIXME: the quotes around serviceEndpoint are incorrect
-	require.True(t, regexp.MustCompile(fmt.Sprintf("appQuotaLimit: 2\ningressController:\n  className: traefik\n  serviceEndpoint: '''.*'''\n  type: traefik\nname: %s\nnamespace: ketch-%s", frameworkCliName, frameworkCliName)).Match(b), string(b))
+	require.True(t, regexp.MustCompile(fmt.Sprintf("appQuotaLimit: 2\ningressController:\n  className: traefik\n(  serviceEndpoint: '''.*'''\n)?  type: traefik\nname: %s\nnamespace: ketch-%s", frameworkCliName, frameworkCliName)).Match(b), string(b))
 
-	// remove frameworks
-	// retry because framework remove may complain that apps are still running if tests run too fast
-	err = retry(ketch, []string{"framework", "remove", frameworkCliName}, fmt.Sprintf("ketch-%s", frameworkCliName), "Framework successfully removed!", 3, 8)
+	// remove framework
+	cmd := exec.Command(ketch, "framework", "remove", frameworkCliName)
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("ketch-%s", frameworkCliName))
+	cmd.Stdin = &buf
+	b, err = cmd.CombinedOutput()
 	require.Nil(t, err)
+	require.Contains(t, string(b), "Framework successfully removed!", string(b))
 }
 
 func TestFrameworkByYaml(t *testing.T) {
@@ -65,7 +70,7 @@ func TestFrameworkByYaml(t *testing.T) {
 	temp, err := os.CreateTemp(t.TempDir(), "*.yaml")
 	require.Nil(t, err)
 	defer os.Remove(temp.Name())
-	temp.WriteString(fmt.Sprintf(`name: %s
+	_, err = temp.WriteString(fmt.Sprintf(`name: %s
 app-quota-limit: 1
 ingressController:
  className: traefik
@@ -89,10 +94,14 @@ ingressController:
 	// export framework
 	b, err = exec.Command(ketch, "framework", "export", frameworkYamlName).CombinedOutput()
 	require.Nil(t, err, string(b))
-	require.True(t, regexp.MustCompile(fmt.Sprintf("appQuotaLimit: 2\ningressController:\n  className: traefik\n  serviceEndpoint: .*\n  type: traefik\nname: %s\nnamespace: ketch-%s\nversion: v1", frameworkYamlName, frameworkYamlName)).Match(b), string(b))
+	require.True(t, regexp.MustCompile(fmt.Sprintf("appQuotaLimit: 2\ningressController:\n  className: traefik\n(  serviceEndpoint: .*\n)?  type: traefik\nname: %s\nnamespace: ketch-%s\nversion: v1", frameworkYamlName, frameworkYamlName)).Match(b), string(b))
 
-	// remove frameworks
-	// retry because framework remove may complain that apps are still running if tests run too fast
-	err = retry(ketch, []string{"framework", "remove", frameworkYamlName}, fmt.Sprintf("ketch-%s", frameworkYamlName), "Framework successfully removed!", 3, 8)
+	// remove framework
+	cmd := exec.Command(ketch, "framework", "remove", frameworkYamlName)
+	var buf bytes.Buffer
+	buf.WriteString(fmt.Sprintf("ketch-%s", frameworkYamlName))
+	cmd.Stdin = &buf
+	b, err = cmd.CombinedOutput()
 	require.Nil(t, err)
+	require.Contains(t, string(b), "Framework successfully removed!", string(b))
 }

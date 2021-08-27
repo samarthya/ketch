@@ -81,11 +81,13 @@ func cleanupFramework(name string) {
 // cleanupApp attempts to remove an app. Can be called in a defer to
 // assure app cleanup in the event of a failed test
 func cleanupApp(name string) {
-	cmd := exec.Command(ketch, "app", "remove", name)
-	var buf bytes.Buffer
-	buf.Write([]byte(fmt.Sprintf("ketch-%s", name)))
-	cmd.Stdin = &buf
-	cmd.Run()
+	exec.Command(ketch, "app", "remove", name).Run()
+}
+
+// cleanupJob attempts to remove an app. Can be called in a defer to
+// assure job cleanup in the event of a failed test
+func cleanupJob(name string) {
+	exec.Command(ketch, "job", "remove", name).Run()
 }
 
 func TestHelp(t *testing.T) {

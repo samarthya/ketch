@@ -157,12 +157,13 @@ func TestAppByYaml(t *testing.T) {
 	temp, err := os.CreateTemp(t.TempDir(), "*.yaml")
 	require.Nil(t, err)
 	defer os.Remove(temp.Name())
-	temp.WriteString(fmt.Sprintf(`name: "%s"
+	_, err = temp.WriteString(fmt.Sprintf(`name: "%s"
 version: v1
 type: Application
 image: %s
 framework: %s
 description: cli test app by yaml`, appYamlName, appImage, appYamlFramework))
+	require.Nil(t, err)
 	b, err = exec.Command(ketch, "app", "deploy", temp.Name()).CombinedOutput()
 	require.Nil(t, err, string(b))
 
@@ -252,6 +253,7 @@ type: Application`, appYamlFramework, appImage, appYamlName)).Match(b), string(b
 	require.Nil(t, err)
 
 	// framework remove
+	// retry - will error that apps are still present sometimes
 	err = retry(ketch, []string{"framework", "remove", appYamlFramework}, fmt.Sprintf("ketch-%s", appYamlFramework), "Framework successfully removed!", 3, 8)
 	require.Nil(t, err)
 }

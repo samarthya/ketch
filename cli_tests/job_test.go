@@ -3,12 +3,12 @@
 package cli_tests
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -28,36 +28,38 @@ func TestJobHelp(t *testing.T) {
 }
 
 func TestJobByYaml(t *testing.T) {
-	defer cleanupFramework(jobFramework)
+	defer func() {
+		cleanupJob(jobName)
+		cleanupFramework(jobFramework)
+	}()
 
 	// add framework
 	b, err := exec.Command(ketch, "framework", "add", jobFramework).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Contains(t, string(b), "Successfully added!")
-
-	err = retry(ketch, []string{"framework", "list"}, "", "Created", 10, 5)
+	err = retry(ketch, []string{"framework", "list"}, "", jobFramework, 3, 3)
 	require.Nil(t, err)
+	time.Sleep(time.Second * 3) // TODO - job test fails if we don't wait even though we assure the framework is created above
 
 	// add job
 	temp, err := os.CreateTemp(t.TempDir(), "*.yaml")
 	require.Nil(t, err)
 	defer os.Remove(temp.Name())
-	temp.WriteString(fmt.Sprintf(`name: %s
+	_, err = temp.WriteString(fmt.Sprintf(`name: %s
 version: v1
 type: Job
 framework: %s
 description: "cli test job"
 containers:
-  - name: pi
-    image: perl
-    command:
-      - "perl"
-      - "-Mbignum=bpi"
-      - "-wle"
-      - "print bpi(2000)"`, jobName, jobFramework))
+- name: pi
+  image: perl
+  command:
+    - "perl"
+    - "-Mbignum=bpi"
+    - "-wle"
+    - "print bpi(2000)"`, jobName, jobFramework))
 
 	b, err = exec.Command(ketch, "job", "deploy", temp.Name()).CombinedOutput()
-	require.Nil(t, err, string(b))
 	require.Nil(t, err, string(b))
 	require.Contains(t, string(b), "Successfully added!")
 
@@ -81,13 +83,4 @@ containers:
 	b, err = exec.Command(ketch, "job", "remove", jobName).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Contains(t, string(b), "Successfully removed!")
-
-	//remove framework
-	cmd := exec.Command(ketch, "framework", "remove", jobFramework)
-	var buf bytes.Buffer
-	buf.Write([]byte(fmt.Sprintf("ketch-%s", jobFramework)))
-	cmd.Stdin = &buf
-	b, err = cmd.CombinedOutput()
-	require.Nil(t, err, string(b))
-	require.Contains(t, string(b), "Framework successfully removed!")
 }
