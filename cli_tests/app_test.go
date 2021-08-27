@@ -63,7 +63,7 @@ func TestAppByCli(t *testing.T) {
 	require.True(t, regexp.MustCompile("Units:  3").Match(b), string(b)) // note two spaces
 
 	// app info
-	err = retry(ketch, []string{"app", "info", appCliName}, "", "running", 20, 5)
+	err = retry(ketch, []string{"app", "info", appCliName}, "", "running", 20, 7)
 	require.Nil(t, err)
 
 	// app list
@@ -167,7 +167,7 @@ description: cli test app by yaml`, appYamlName, appImage, appYamlFramework))
 	b, err = exec.Command(ketch, "app", "deploy", temp.Name()).CombinedOutput()
 	require.Nil(t, err, string(b))
 
-	err = retry(ketch, []string{"app", "info", appYamlName}, "", "running", 20, 5)
+	err = retry(ketch, []string{"app", "info", appYamlName}, "", "running", 20, 7)
 	require.Nil(t, err)
 
 	// app unit set
