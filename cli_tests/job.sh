@@ -114,6 +114,11 @@ EOF
   [[ $result =~ $parallelismRegex ]]
 }
 
+@test "NS" {
+  res=$(kubectl get ns $JOB_FRAMEWORK)
+  [[ $res =~ $JOB_FRAMEWORK ]]
+}
+
 @test "job remove" {
   result=$($KETCH job remove "$JOB_NAME")
   echo "RECEIVED:" $result
