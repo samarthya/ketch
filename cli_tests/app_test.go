@@ -40,14 +40,15 @@ func TestAppHelp(t *testing.T) {
 func TestAppByCli(t *testing.T) {
 	defer func() {
 		cleanupApp(appCliName)
-		time.Sleep(time.Second * 3)
+		time.Sleep(time.Second) // give app time to be removed
 		cleanupFramework(appCliFramework)
 	}()
 
 	// app framework
 	b, err := exec.Command(ketch, "framework", "add", appCliFramework, "--ingress-service-endpoint", ingress, "--ingress-type", "traefik").CombinedOutput()
 	require.Nil(t, err, string(b))
-	require.Contains(t, string(b), "Successfully added!")
+	err = retry(ketch, []string{"framework", "list"}, "", fmt.Sprintf("%s[ \t]+Created", appCliFramework), 3, 3)
+	require.Nil(t, err, string(b))
 
 	// app deploy
 	b, err = exec.Command(ketch, "app", "deploy", appCliName, "--framework", appCliFramework, "-i", appImage).CombinedOutput()
@@ -63,11 +64,11 @@ func TestAppByCli(t *testing.T) {
 	require.True(t, regexp.MustCompile("Units:  3").Match(b), string(b)) // note two spaces
 
 	// app info
-	err = retry(ketch, []string{"app", "info", appCliName}, "", "running", 20, 7)
+	err = retry(ketch, []string{"app", "info", appCliName}, "", fmt.Sprintf("1[ \t]+%s[ \t]+web[ \t]+100%%[ \t]+3 running", appImage), 20, 5)
 	require.Nil(t, err)
 
 	// app list
-	err = retry(ketch, []string{"app", "list"}, "", "running", 4, 4)
+	err = retry(ketch, []string{"app", "list"}, "", fmt.Sprintf("%s[ \t]+%s[ \t]+3 running", appCliName, appCliFramework), 4, 4)
 	require.Nil(t, err)
 
 	b, err = exec.Command(ketch, "app", "list").CombinedOutput()
@@ -79,13 +80,10 @@ func TestAppByCli(t *testing.T) {
 	// app export
 	b, err = exec.Command(ketch, "app", "export", appCliName).CombinedOutput()
 	require.Nil(t, err, string(b))
-	require.True(t, regexp.MustCompile(fmt.Sprintf(`framework: %s
-image: %s
-name: %s
-processes:
-- name: web
-  units: 3
-type: Application`, appCliFramework, appImage, appCliName)).Match(b), string(b))
+	require.Contains(t, string(b), fmt.Sprintf("framework: %s", appCliFramework))
+	require.Contains(t, string(b), fmt.Sprintf("image: %s", appImage))
+	require.Contains(t, string(b), fmt.Sprintf("name: %s", appCliName))
+	require.Contains(t, string(b), "type: Application")
 
 	b, err = exec.Command(ketch, "app", "info", appCliName).CombinedOutput()
 	require.Nil(t, err, string(b))
@@ -143,15 +141,16 @@ type: Application`, appCliFramework, appImage, appCliName)).Match(b), string(b))
 
 func TestAppByYaml(t *testing.T) {
 	defer func() {
-		cleanupApp(appCliName)
-		time.Sleep(time.Second * 3)
-		cleanupFramework(appCliFramework)
+		cleanupApp(appYamlName)
+		time.Sleep(time.Second) // give app time to be removed
+		cleanupFramework(appYamlFramework)
 	}()
 
 	// app framework
 	b, err := exec.Command(ketch, "framework", "add", appYamlFramework, "--ingress-service-endpoint", ingress, "--ingress-type", "traefik").CombinedOutput()
 	require.Nil(t, err, string(b))
-	require.Contains(t, string(b), "Successfully added!")
+	err = retry(ketch, []string{"framework", "list"}, "", fmt.Sprintf("%s[ \t]+Created", appYamlFramework), 3, 3)
+	require.Nil(t, err, string(b))
 
 	// app deploy
 	temp, err := os.CreateTemp(t.TempDir(), "*.yaml")
@@ -170,43 +169,41 @@ description: cli test app by yaml`, appYamlName, appImage, appYamlFramework))
 	err = retry(ketch, []string{"app", "info", appYamlName}, "", "running", 20, 7)
 	require.Nil(t, err)
 
-	// app unit set
-	b, err = exec.Command(ketch, "app", "deploy", appYamlName, "--framework", appYamlFramework, "-i", appImage, "--units", "3").CombinedOutput()
-	require.Nil(t, err, string(b))
+	// // app unit set
+	// b, err = exec.Command(ketch, "app", "deploy", appYamlName, "--framework", appYamlFramework, "-i", appImage, "--units", "3").CombinedOutput()
+	// require.Nil(t, err, string(b))
 
 	b, err = exec.Command("kubectl", "describe", "apps", appYamlName).CombinedOutput()
 	require.Nil(t, err, string(b))
-	require.True(t, regexp.MustCompile("Units:  3").Match(b), string(b)) // note two spaces
+	require.True(t, regexp.MustCompile("Units:  1").Match(b), string(b)) // note two spaces
 
 	// app info
-	err = retry(ketch, []string{"app", "info", appYamlName}, "", "running", 20, 5)
+	err = retry(ketch, []string{"app", "info", appYamlName}, "", fmt.Sprintf("1[ \t]+%s[ \t]+web[ \t]+100%%[ \t]+1 running", appImage), 20, 5)
 	require.Nil(t, err)
 
 	// app list
-	err = retry(ketch, []string{"app", "list"}, "", "running", 4, 4)
+	err = retry(ketch, []string{"app", "list"}, "", fmt.Sprintf("%s[ \t]+%s[ \t]+1 running", appYamlName, appYamlFramework), 4, 4)
 	require.Nil(t, err)
 
 	b, err = exec.Command(ketch, "app", "list").CombinedOutput()
 	require.Nil(t, err, string(b))
 
 	require.True(t, regexp.MustCompile("NAME[ \t]+FRAMEWORK[ \t]+STATE[ \t]+ADDRESSES[ \t]+BUILDER[ \t]+DESCRIPTION").Match(b), string(b))
-	require.True(t, regexp.MustCompile(fmt.Sprintf("%s[ \t]+%s[ \t]+(.*[1-3] running)", appYamlName, appYamlFramework)).Match(b), string(b))
+	require.True(t, regexp.MustCompile(fmt.Sprintf("%s[ \t]+%s[ \t]+1 running", appYamlName, appYamlFramework)).Match(b), string(b))
 
 	// app export
 	b, err = exec.Command(ketch, "app", "export", appYamlName).CombinedOutput()
 	require.Nil(t, err, string(b))
-	require.True(t, regexp.MustCompile(fmt.Sprintf(`framework: %s
-image: %s
-name: %s
-processes:
-- name: web
-  units: 3
-type: Application`, appYamlFramework, appImage, appYamlName)).Match(b), string(b))
+	require.Contains(t, string(b), fmt.Sprintf("framework: %s", appCliFramework))
+	require.Contains(t, string(b), fmt.Sprintf("image: %s", appImage))
+	require.Contains(t, string(b), fmt.Sprintf("name: %s", appYamlName))
+	require.Contains(t, string(b), "type: Application")
+	require.Contains(t, string(b), "version: v1")
 
 	b, err = exec.Command(ketch, "app", "info", appYamlName).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.True(t, regexp.MustCompile("DEPLOYMENT VERSION[ \t]+IMAGE[ \t]+PROCESS NAME[ \t]+WEIGHT[ \t]+STATE[ \t]+CMD").Match(b), string(b))
-	require.True(t, regexp.MustCompile(fmt.Sprintf("1[ \t]+%s[ \t]+web[ \t]+100%%[ \t]+.*[1-3] running[ \t]", appImage)).Match(b), string(b))
+	require.True(t, regexp.MustCompile(fmt.Sprintf("1[ \t]+%s[ \t]+web[ \t]+100%%[ \t]+1 running[ \t]", appImage)).Match(b), string(b))
 
 	// app stop
 	b, err = exec.Command(ketch, "app", "stop", appYamlName).CombinedOutput()

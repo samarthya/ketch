@@ -40,7 +40,8 @@ func TestFrameworkByCLI(t *testing.T) {
 	b, err = exec.Command(ketch, "framework", "list").CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.True(t, regexp.MustCompile("NAME[ \t]+STATUS[ \t]+NAMESPACE[ \t]+INGRESS TYPE[ \t]+INGRESS CLASS NAME[ \t]+CLUSTER ISSUER[ \t]+APPS").Match(b), string(b))
-	require.True(t, regexp.MustCompile(fmt.Sprintf("%s[ \t]+[Created \t]+ketch-%s[ \t]+traefik[ \t]+traefik", frameworkCliName, frameworkCliName)).Match(b), string(b))
+	err = retry(ketch, []string{"framework", "list"}, "", fmt.Sprintf("%s[ \t]+Created[ \t]+ketch-%s[ \t]+traefik", frameworkCliName, frameworkCliName), 3, 3)
+	require.Nil(t, err, string(b))
 
 	// update framework
 	b, err = exec.Command(ketch, "framework", "update", frameworkCliName, "--app-quota-limit", "2").CombinedOutput()
@@ -84,7 +85,8 @@ ingressController:
 	// list framework
 	b, err = exec.Command(ketch, "framework", "list").CombinedOutput()
 	require.Nil(t, err, string(b))
-	require.True(t, regexp.MustCompile(fmt.Sprintf("%s[ \t]+[Created \t]+ketch-%s[ \t]+traefik[ \t]+traefik", frameworkYamlName, frameworkYamlName)).Match(b), string(b))
+	err = retry(ketch, []string{"framework", "list"}, "", fmt.Sprintf("%s[ \t]+Created[ \t]+ketch-%s[ \t]+traefik", frameworkYamlName, frameworkYamlName), 3, 3)
+	require.Nil(t, err, string(b))
 
 	// update framework
 	b, err = exec.Command(ketch, "framework", "update", frameworkYamlName, "--app-quota-limit", "2").CombinedOutput()

@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -37,9 +36,8 @@ func TestJobByYaml(t *testing.T) {
 	b, err := exec.Command(ketch, "framework", "add", jobFramework).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Contains(t, string(b), "Successfully added!")
-	err = retry(ketch, []string{"framework", "list"}, "", jobFramework, 3, 3)
+	err = retry(ketch, []string{"framework", "list"}, "", fmt.Sprintf("%s[ \t]+Created", jobFramework), 3, 3) // assure framework created
 	require.Nil(t, err)
-	time.Sleep(time.Second * 3) // TODO - job test fails if we don't wait even though we assure the framework is created above
 
 	// add job
 	temp, err := os.CreateTemp(t.TempDir(), "*.yaml")
@@ -57,15 +55,12 @@ containers:
     - "perl"
     - "-Mbignum=bpi"
     - "-wle"
-    - "print bpi(2000)"`, jobName, jobFramework))
+    - "print bpi(2000)"
+parallelism: 2`, jobName, jobFramework))
 
 	b, err = exec.Command(ketch, "job", "deploy", temp.Name()).CombinedOutput()
 	require.Nil(t, err, string(b))
 	require.Contains(t, string(b), "Successfully added!")
-
-	// // assert job via kubectl
-	// err = retry("kubectl", []string{"get", "jobs", "-n", fmt.Sprintf("ketch-%s", jobFramework)}, "", "/1", 10, 4)
-	// require.Nil(t, err)
 
 	// list job
 	b, err = exec.Command(ketch, "job", "list").CombinedOutput()

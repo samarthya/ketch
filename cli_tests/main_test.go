@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -57,7 +58,7 @@ func retry(name string, args []string, input string, match string, times, wait i
 		sb.Write(b)
 		sb.WriteString("\n")
 
-		if strings.Contains(string(b), match) {
+		if ok, _ := regexp.MatchString(match, string(b)); ok {
 			return nil
 		}
 		if i < times-1 {
