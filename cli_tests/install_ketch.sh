@@ -45,3 +45,6 @@ helm install traefik traefik/traefik
 kubectl wait --for=condition=Ready=true pod -n cert-manager --all
 kubectl get pods -A
 
+# install
+make create-controller-yaml docker-build docker-push deploy
+kubectl apply -f ketch-controller.yaml
