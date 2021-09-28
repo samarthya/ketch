@@ -41,6 +41,9 @@ type httpsEndpoint struct {
 
 	// SecretName is a name of a Kubernetes Secret to store SSL certificate for the cname.
 	SecretName string `json:"secretName"`
+
+	// ClusterIssuer is the name of the cert-manager's ClusterIssuer to use for this endpoint (overriding the Framework default).
+	ClusterIssuer string `json:"clusterIssuer"`
 }
 
 // Ingress contains information about entrypoints of an application.
@@ -335,13 +338,16 @@ func newIngress(app ketchv1.App, framework ketchv1.Framework) (*ingress, error) 
 	for _, cname := range app.Spec.Ingress.Cnames {
 		if cname.Secure {
 			secretName := app.Spec.SecretName
+			clusterIssuer := fmt.Sprintf("%s-clusterissuer", app.Spec.SecretName)
+
 			if secretName == "" {
 				if len(framework.Spec.IngressController.ClusterIssuer) == 0 {
 					return nil, errors.New("secure cnames require a framework.Ingress.ClusterIssuer to be specified")
 				}
+				clusterIssuer = framework.Spec.IngressController.ClusterIssuer
 				secretName = generateSecret(app.Name, cname.Name)
 			}
-			https = append(https, httpsEndpoint{Cname: cname.Name, SecretName: secretName})
+			https = append(https, httpsEndpoint{Cname: cname.Name, SecretName: secretName, ClusterIssuer: clusterIssuer})
 		} else {
 			http = append(http, cname.Name)
 		}

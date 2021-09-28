@@ -174,7 +174,6 @@ func (r *AppReconciler) reconcile(ctx context.Context, app *ketchv1.App) reconci
 			message: fmt.Sprintf(`you have reached the limit of apps`),
 		}
 	}
-
 	options := []chart.Option{
 		chart.WithExposedPorts(app.ExposedPorts()),
 		chart.WithTemplates(*tpls),
@@ -198,20 +197,6 @@ func (r *AppReconciler) reconcile(ctx context.Context, app *ketchv1.App) reconci
 			}
 		}
 	}
-	// update framework with cluster issuer, if app.Secret
-	patchedFramework = framework
-	if app.Spec.SecretName != "" {
-		// created ClusterIssuer name is based on app's secretName
-		patchedFramework.Spec.IngressController.ClusterIssuer = fmt.Sprintf("%s-clusterissuer", app.Spec.SecretName)
-		mergePatch := client.MergeFrom(&framework)
-		if err := r.Client.Patch(ctx, &patchedFramework, mergePatch); err != nil {
-			return reconcileResult{
-				status:  v1.ConditionFalse,
-				message: fmt.Sprintf("failed to update framework ingress controller: %v", err),
-			}
-		}
-	}
-
 	targetNamespace := framework.Status.Namespace.Name
 	helmClient, err := r.HelmFactoryFn(targetNamespace)
 	if err != nil {
@@ -279,7 +264,6 @@ func (r *AppReconciler) reconcile(ctx context.Context, app *ketchv1.App) reconci
 			message: fmt.Sprintf("failed to update helm chart: %v", err),
 		}
 	}
-
 	return reconcileResult{
 		framework: ref,
 		status:    v1.ConditionTrue,

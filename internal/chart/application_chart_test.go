@@ -334,7 +334,7 @@ func TestNewIngress(t *testing.T) {
 			},
 			clusterIssuer: "test-cluster-issuer",
 			expected: &ingress{
-				Https: []httpsEndpoint{{Cname: "a.name", SecretName: "-cname-2bffdc1c076b2cc72660"}},
+				Https: []httpsEndpoint{{Cname: "a.name", SecretName: "-cname-2bffdc1c076b2cc72660", ClusterIssuer: "test-cluster-issuer"}},
 				Http:  []string{"b.name"},
 			},
 		},
@@ -365,7 +365,7 @@ func TestNewIngress(t *testing.T) {
 			},
 			appSecret: "app-secret",
 			expected: &ingress{
-				Https: []httpsEndpoint{{Cname: "a.name", SecretName: "app-secret"}},
+				Https: []httpsEndpoint{{Cname: "a.name", SecretName: "app-secret", ClusterIssuer: "app-secret-clusterissuer"}},
 				Http:  []string{"b.name"},
 			},
 		},
