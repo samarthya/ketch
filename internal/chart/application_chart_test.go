@@ -181,6 +181,13 @@ func TestNewApplicationChart(t *testing.T) {
 		return &out
 	}
 
+	// addAppSecret returns a copy of app with a SecretName set in the app.Spec
+	addAppSecret := func(app *ketchv1.App, secret string) *ketchv1.App {
+		out := *app
+		out.Spec.SecretName = secret
+		return &out
+	}
+
 	tests := []struct {
 		name        string
 		application *ketchv1.App
@@ -252,6 +259,17 @@ func TestNewApplicationChart(t *testing.T) {
 			group:             "shipa.io",
 			wantYamlsFilename: "dashboard-traefik-cluster-issuer-shipa",
 		},
+		{
+			name: "traefik templates with app secret",
+			opts: []Option{
+				WithTemplates(templates.TraefikDefaultTemplates),
+				WithExposedPorts(exportedPorts),
+			},
+			application:       addAppSecret(convertSecureEndpoints(dashboard), "foobar"),
+			framework:         frameworkWithoutClusterIssuer,
+			group:             "theketch.io",
+			wantYamlsFilename: "dashboard-traefik-secret",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -299,6 +317,7 @@ func TestNewIngress(t *testing.T) {
 		name          string
 		cnames        ketchv1.CnameList
 		clusterIssuer string
+		appSecret     string
 		expected      *ingress
 		expectedError error
 	}{
@@ -334,6 +353,23 @@ func TestNewIngress(t *testing.T) {
 			},
 		},
 		{
+			name: "happy - app secret",
+			cnames: ketchv1.CnameList{
+				{
+					Name:   "a.name",
+					Secure: true,
+				},
+				{
+					Name: "b.name",
+				},
+			},
+			appSecret: "app-secret",
+			expected: &ingress{
+				Https: []httpsEndpoint{{Cname: "a.name", SecretName: "app-secret"}},
+				Http:  []string{"b.name"},
+			},
+		},
+		{
 			name: "sad - no cluster issuer",
 			cnames: ketchv1.CnameList{
 				{
@@ -351,6 +387,7 @@ func TestNewIngress(t *testing.T) {
 					Ingress: ketchv1.IngressSpec{
 						Cnames: tt.cnames,
 					},
+					SecretName: tt.appSecret,
 				},
 			}
 			framework := ketchv1.Framework{

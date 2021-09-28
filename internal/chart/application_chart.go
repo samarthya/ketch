@@ -64,6 +64,7 @@ type app struct {
 	// For example, "spec.rules" of an Ingress object must contain at least one rule.
 	IsAccessible bool   `json:"isAccessible"`
 	Group        string `json:"group"`
+	Secret       string `json:"secret"`
 }
 
 type deployment struct {
@@ -134,6 +135,7 @@ func New(application *ketchv1.App, framework *ketchv1.Framework, opts ...Option)
 			Ingress: *ingress,
 			Env:     application.Spec.Env,
 			Group:   ketchv1.Group,
+			Secret:  application.Spec.SecretName,
 		},
 		IngressController: &framework.Spec.IngressController,
 	}
@@ -312,33 +314,36 @@ func isAppAccessible(a *app) bool {
 
 func newIngress(app ketchv1.App, framework ketchv1.Framework) (*ingress, error) {
 	var http []string
-	var https []string
+	var https []httpsEndpoint
 
 	for _, cname := range app.Spec.Ingress.Cnames {
 		if cname.Secure {
-			if len(framework.Spec.IngressController.ClusterIssuer) == 0 {
-				return nil, errors.New("secure cnames require a framework.Ingress.ClusterIssuer to be specified")
+			secretName := app.Spec.SecretName
+			if secretName == "" {
+				if len(framework.Spec.IngressController.ClusterIssuer) == 0 {
+					return nil, errors.New("secure cnames require a framework.Ingress.ClusterIssuer to be specified")
+				}
+				secretName = generateSecret(app.Name, cname.Name)
 			}
-			https = append(https, cname.Name)
+			https = append(https, httpsEndpoint{Cname: cname.Name, SecretName: secretName})
 		} else {
 			http = append(http, cname.Name)
 		}
 	}
 
-	var httpsEndpoints []httpsEndpoint
-	for _, cname := range https {
-		hash := sha256.New()
-		hash.Write([]byte(fmt.Sprintf("cname-%s", cname)))
-		bs := hash.Sum(nil)
-		secretName := fmt.Sprintf("%s-cname-%x", app.Name, bs[:10])
-		httpsEndpoints = append(httpsEndpoints, httpsEndpoint{Cname: cname, SecretName: secretName})
-	}
 	defaultCname := app.DefaultCname(&framework)
 	if defaultCname != nil {
 		http = append(http, *defaultCname)
 	}
 	return &ingress{
 		Http:  http,
-		Https: httpsEndpoints,
+		Https: https,
 	}, nil
+}
+
+func generateSecret(appName, cname string) string {
+	hash := sha256.New()
+	hash.Write([]byte(fmt.Sprintf("cname-%s", cname)))
+	bs := hash.Sum(nil)
+	return fmt.Sprintf("%s-cname-%x", appName, bs[:10])
 }
