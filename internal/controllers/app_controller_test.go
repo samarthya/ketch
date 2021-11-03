@@ -10,11 +10,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v3/pkg/release"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
+
+	clientFake "k8s.io/client-go/kubernetes/fake"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlFake "sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -193,6 +198,98 @@ func TestAppReconciler_Reconcile(t *testing.T) {
 	assert.Equal(t, []string{"app-running"}, helmMock.deleteChartCalled)
 }
 
+func TestWatchDeployEvents(t *testing.T) {
+	process := &ketchv1.ProcessSpec{}
+
+	app := &ketchv1.App{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+		Spec: ketchv1.AppSpec{
+			Deployments: []ketchv1.AppDeploymentSpec{
+				{
+					Image:     "gcr.io/test",
+					Version:   1,
+					Processes: []ketchv1.ProcessSpec{*process},
+				},
+			},
+			Framework: "test",
+		},
+	}
+	namespace := "ketch-test"
+	replicas := int32(1)
+
+	// depStart is the Deployment in it's initial state
+	depStart := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "ketch-test",
+		},
+		Status: appsv1.DeploymentStatus{
+			UpdatedReplicas:     1,
+			UnavailableReplicas: 1,
+			Replicas:            1,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+		},
+	}
+
+	// depFetch is the Deployment as returned via Get() in the function's loop
+	depFetch := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "ketch-test",
+		},
+		Status: appsv1.DeploymentStatus{
+			UpdatedReplicas:     1,
+			UnavailableReplicas: 0,
+			Replicas:            1,
+			ReadyReplicas:       1,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+		},
+	}
+
+	recorder := record.NewFakeRecorder(1024)
+	watcher := watch.NewFake()
+	cli := clientFake.NewSimpleClientset(depFetch)
+	timeout := time.After(DefaultPodRunningTimeout)
+	r := AppReconciler{}
+	ctx := context.Background()
+
+	var events []string
+	go func() {
+		for ev := range recorder.Events {
+			events = append(events, ev)
+		}
+	}()
+
+	err := r.watchFunc(ctx, app, namespace, depStart, process, recorder, watcher, cli, timeout)
+	require.Nil(t, err)
+
+	time.Sleep(time.Millisecond * 100)
+
+	expectedEvents := []string{
+		"Normal AppReconcileStarted Updating units []",
+		"Normal AppReconcileUpdate 1 of 1 new units created",
+		"Normal AppReconcileUpdate 0 of 1 new units ready",
+		"Normal AppReconcileUpdate 1 of 1 new units ready",
+		"Normal AppReconcileComplete app test 1 reconcile success",
+	}
+
+EXPECTED:
+	for _, expected := range expectedEvents {
+		for _, ev := range events {
+			if ev == expected {
+				continue EXPECTED
+			}
+		}
+		t.Errorf("expected event %s, but it was not found", expected)
+	}
+}
+
 func Test_checkPodStatus(t *testing.T) {
 	createPod := func(group, appName, version string, status v1.PodStatus) *v1.Pod {
 		return &v1.Pod{
@@ -246,6 +343,98 @@ func Test_checkPodStatus(t *testing.T) {
 				return
 			}
 			require.Nil(t, err)
+		})
+	}
+}
+
+func TestStringifyEvent(t *testing.T) {
+	tests := []struct {
+		obj      watch.Event
+		expected string
+	}{
+		{
+			obj: watch.Event{
+				Object: &v1.Event{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-event",
+					},
+					InvolvedObject: v1.ObjectReference{
+						Name: "test name",
+					},
+					Message: "test message",
+				}},
+			expected: "test name - test message []",
+		},
+		{
+			obj: watch.Event{
+				Object: &v1.Event{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-event",
+					},
+					InvolvedObject: v1.ObjectReference{
+						Name:      "test name",
+						FieldPath: "test/fieldpath",
+					},
+					Message: "test message",
+					Source: v1.EventSource{
+						Host:      "testhost",
+						Component: "testcomponent",
+					},
+				},
+			},
+			expected: "test name - test/fieldpath - test message [testcomponent, testhost]",
+		},
+		{
+			obj: watch.Event{
+				Object: &v1.Pod{},
+			},
+			expected: "",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.expected, func(t *testing.T) {
+			stringifyEvent(tc.obj)
+		})
+	}
+}
+
+func TestIsDeploymentEvent(t *testing.T) {
+	tests := []struct {
+		msg      watch.Event
+		expected bool
+	}{
+		{
+			msg: watch.Event{
+				Object: &v1.Event{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test",
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			msg: watch.Event{
+				Object: &v1.Event{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "bad-name",
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run("", func(t *testing.T) {
+			res := isDeploymentEvent(tc.msg, dep)
+			require.Equal(t, tc.expected, res)
 		})
 	}
 }
