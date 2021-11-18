@@ -46,7 +46,7 @@ func (p *postRender) Run(renderedManifests *bytes.Buffer) (modifiedManifests *by
 			// some k8s fields do not support wildcards necessitating the ability
 			// to inject the appname into the yaml file contents found in the cm
 			if strings.Contains(v, "POSTRENDER_INSERT_APPNAME") {
-				strings.ReplaceAll(v, "POSTRENDER_INSERT_APPNAME", p.appname)
+				v = strings.ReplaceAll(v, "POSTRENDER_INSERT_APPNAME", p.appname)
 			}
 			if err := fs.WriteFile(fileName, []byte(v)); err != nil {
 				return nil, err
