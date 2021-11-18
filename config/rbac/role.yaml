@@ -9,7 +9,7 @@ rules:
 - apiGroups:
     - "autoscaling"
   resources:
-    - deployments
+    - horizontalpodautoscalers
   verbs:
     - create
     - delete
