@@ -17,6 +17,7 @@ var _ postrender.PostRenderer = &postRender{}
 
 type postRender struct {
 	cli       client.Client
+	appname   string
 	namespace string
 }
 
@@ -42,6 +43,11 @@ func (p *postRender) Run(renderedManifests *bytes.Buffer) (modifiedManifests *by
 
 		for k, v := range cm.Data {
 			fileName := p.namespace + "/" + k
+			// some k8s fields do not support wildcards necessitating the ability
+			// to inject the appname into the yaml file contents found in the cm
+			if strings.Contains(v, "POSTRENDER_INSERT_APPNAME") {
+				strings.ReplaceAll(v, "POSTRENDER_INSERT_APPNAME", p.appname)
+			}
 			if err := fs.WriteFile(fileName, []byte(v)); err != nil {
 				return nil, err
 			}

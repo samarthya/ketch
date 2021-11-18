@@ -79,6 +79,7 @@ func (c HelmClient) UpdateChart(tv TemplateValuer, config ChartConfig, opts ...I
 		clientInstall.Namespace = c.namespace
 		clientInstall.PostRenderer = &postRender{
 			namespace: c.namespace,
+			appname:   appName,
 			cli:       c.c,
 		}
 		for _, opt := range opts {
@@ -93,6 +94,7 @@ func (c HelmClient) UpdateChart(tv TemplateValuer, config ChartConfig, opts ...I
 	updateClient.Namespace = c.namespace
 	updateClient.PostRenderer = &postRender{
 		namespace: c.namespace,
+		appname:   appName,
 		cli:       c.c,
 	}
 	return updateClient.Run(appName, chrt, vals)
